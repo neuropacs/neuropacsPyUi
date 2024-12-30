@@ -1,0 +1,16 @@
+# Packaging Instructions
+
+1. Run PyInstaller on the main script:
+   pyinstaller main.spec
+
+The resulting executable will be in the `dist` folder.
+
+2. Create the DMG
+create-dmg \
+    --volname "neuropacsUI" \
+    --window-size 800 400 \
+    --icon-size 100 \
+    --icon "neuropacsUI" 200 150 \
+    --app-drop-link 600 150 \
+    dist/neuropacsUI.dmg dist/neuropacsUI.app
+
