@@ -68,12 +68,6 @@ jobs:
         with:
           path: build_artifacts
 
-      - name: Zip Build Artifacts
-        run: |
-          cd build_artifacts
-          zip -r ../build_artifacts.zip .
-          cd ..
-
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
