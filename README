@@ -1,0 +1,72 @@
+![Build+Deploy](https://github.com/neuropacs/neuropacsPyUi/actions/workflows/cicd.yml/badge.svg)
+
+# neuropacs™ neuropacsUI
+
+neuropacsUI offers a streamlined, intuitive interface that makes interacting with our API effortless.
+
+## Getting Started
+
+### Installation
+
+Follow the instructions below to install neuropacsUI on your operating system.
+
+## MacOS
+
+1. Download the DMG: Visit our [Github Releases](https://github.com/neuropacs/neuropacsPyUi/releases/tag/main) page and download the neuropacsUI.dmg file.
+
+2. Mount the DMG: Double-click the DMG file to mount it. A Finder window will open showing the application.
+
+3. Install the Application: Drag and drop the neuropacsUI.app icon into your Applications folder.
+
+4. Launch the Application: Open the Applications folder and double-click neuropacsUI.app to start the application.
+
+5. Bypass Security Warning\*: If you see a warning that the app is not verified, right-click (or control-click) the app, choose "Open," and then confirm to bypass the warning.
+
+## Linux
+
+1. Download the Archive: Visit our [Github Releases](https://github.com/neuropacs/neuropacsPyUi/releases/tag/main) page and download the neuropacsUI-linux.tar.gz file.
+
+2. Extract the Archive: Open a terminal and run the following command (adjust the filename if needed):
+
+```sh
+tar -xzvf neuropacsUI-linux.tar.gz
+```
+
+3. Run the Application: Change into the extracted directory and execute the application:
+
+```sh
+cd neuropacsUI
+./neuropacsUI
+```
+
+4. Set Executable Permissions: If required, run:
+
+```sh
+chmod +x neuropacsUI
+```
+
+## Windows
+
+1. Download the ZIP: Visit our [Github Releases](https://github.com/neuropacs/neuropacsPyUi/releases/tag/main) page and download the neuropacsUI-windows.zip file.
+
+2. Extract the ZIP: Right-click the ZIP file and choose "Extract All…" to extract it to your preferred folder.
+
+3. Launch the Application: Open the extracted folder and double-click neuropacsUI.exe to start the application.
+
+4. Troubleshooting: If the application does not launch, ensure that your system meets all prerequisites and that your antivirus software is not blocking it.
+
+### Usage
+
+![Main Window](resources/neuropacsUI-instr-1.png)
+
+## Authors
+
+Kerrick Cavanaugh - kerrick@neuropacs.com
+
+## Releases
+
+Main - [See more](https://github.com/neuropacs/neuropacsPyUi/releases/tag/main)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE.md file for details
