@@ -44,10 +44,10 @@ jobs:
           tar -czvf neuropacsUI-linux.tar.gz -C dist neuropacsUI
 
       # Package for Windows: compress the dist folder into a ZIP
-      # - name: Package Build (Windows)
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     powershell Compress-Archive -Path dist\* -DestinationPath neuropacsUI-windows.zip
+      - name: Package Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          powershell Compress-Archive -Path dist\* -DestinationPath neuropacsUI-windows.zip
 
       # Upload the built package as an artifact for each OS
       - name: Upload Artifact
@@ -57,7 +57,7 @@ jobs:
           path: |
             ${{ runner.os == 'macOS' && 'neuropacsUI.dmg' || '' }}
             ${{ runner.os == 'Linux' && 'neuropacsUI-linux.tar.gz' || '' }}
-      # ${{ runner.os == 'Windows' && 'neuropacsUI-windows.zip' || '' }}
+            ${{ runner.os == 'Windows' && 'neuropacsUI-windows.zip' || '' }}
 
   release:
     needs: build
@@ -101,13 +101,13 @@ jobs:
           asset_name: neuropacsUI-linux.tar.gz
           asset_content_type: application/gzip
 
-      # - name: Upload Windows ZIP to GitHub Release
-      #   if: runner.os == 'Linux' || runner.os == 'Windows' || runner.os == 'macOS'
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-      #     asset_path: build_artifacts/build-windows-latest/neuropacsUI-windows.zip
-      #     asset_name: neuropacsUI-windows.zip
-      #     asset_content_type: application/zip
+      - name: Upload Windows ZIP to GitHub Release
+        if: runner.os == 'Linux' || runner.os == 'Windows' || runner.os == 'macOS'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build_artifacts/build-windows-latest/neuropacsUI-windows.zip
+          asset_name: neuropacsUI-windows.zip
+          asset_content_type: application/zip
