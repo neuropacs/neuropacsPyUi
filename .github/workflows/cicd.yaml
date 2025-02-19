@@ -86,7 +86,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build_artifacts/neuropacsUI.dmg
+          asset_path: build_artifacts/build-macos-latest/neuropacsUI.dmg
           asset_name: neuropacsUI.dmg
           asset_content_type: application/x-apple-diskimage
 
@@ -97,7 +97,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build_artifacts/neuropacsUI-linux.tar.gz
+          asset_path: build_artifacts/build-ubuntu-latest/neuropacsUI-linux.tar.gz
           asset_name: neuropacsUI-linux.tar.gz
           asset_content_type: application/gzip
 
@@ -108,6 +108,6 @@ jobs:
       #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       #   with:
       #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-      #     asset_path: build_artifacts/neuropacsUI-windows.zip
+      #     asset_path: build_artifacts/build-windows-latest/neuropacsUI-windows.zip
       #     asset_name: neuropacsUI-windows.zip
       #     asset_content_type: application/zip
