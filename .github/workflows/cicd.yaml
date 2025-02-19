@@ -11,7 +11,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+        # windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -43,10 +44,10 @@ jobs:
           tar -czvf neuropacsUI-linux.tar.gz -C dist neuropacsUI
 
       # Package for Windows: compress the dist folder into a ZIP
-      - name: Package Build (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          powershell Compress-Archive -Path dist\* -DestinationPath neuropacsUI-windows.zip
+      # - name: Package Build (Windows)
+      #   if: runner.os == 'Windows'
+      #   run: |
+      #     powershell Compress-Archive -Path dist\* -DestinationPath neuropacsUI-windows.zip
 
       # Upload the built package as an artifact for each OS
       - name: Upload Artifact
@@ -56,7 +57,7 @@ jobs:
           path: |
             ${{ runner.os == 'macOS' && 'neuropacsUI.dmg' || '' }}
             ${{ runner.os == 'Linux' && 'neuropacsUI-linux.tar.gz' || '' }}
-            ${{ runner.os == 'Windows' && 'neuropacsUI-windows.zip' || '' }}
+    # ${{ runner.os == 'Windows' && 'neuropacsUI-windows.zip' || '' }}
 
   release:
     needs: build
