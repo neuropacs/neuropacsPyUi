@@ -1,6 +1,6 @@
-# client.py
+# sdk_client.py
+# neuropacs client interface
 import neuropacs
-import ast
 import json
 
 class SDKClient:
@@ -59,3 +59,7 @@ class SDKClient:
             return png_bytes
         else:
             return results_raw
+
+    def getReport(self, start_date, end_date, format="email"):
+        response = self.npcs.get_report(start_date=start_date, end_date=end_date, format=format)
+        return response

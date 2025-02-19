@@ -6,7 +6,7 @@ cryptography==44.0.0
 dicomweb-client==0.59.3
 idna==3.10
 macholib==1.16.3
-neuropacs==1.8.5
+neuropacs
 numpy==2.2.0
 packaging==24.2
 pillow==11.0.0

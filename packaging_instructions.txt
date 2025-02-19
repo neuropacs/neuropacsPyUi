@@ -3,7 +3,7 @@
 1. Create virtual environment w/ requirements.txt
 
 2. Run PyInstaller on the main script:
-   pyinstaller main.spec
+   pyinstaller --clean main.spec
 
 The resulting executable will be in the `dist` folder.
 

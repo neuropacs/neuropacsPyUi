@@ -1,0 +1,114 @@
+name: Build neuropacsUI Cross-Platform
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --clean main.spec
+
+      # Package for macOS using hdiutil to create a DMG
+      - name: Package Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -volname neuropacsUI -srcfolder dist/neuropacsUI.app -ov -format UDZO neuropacsUI.dmg
+
+      # Package for Linux: create a tar.gz of the build
+      - name: Package Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar -czvf neuropacsUI-linux.tar.gz -C dist neuropacsUI
+
+      # Package for Windows: compress the dist folder into a ZIP
+      - name: Package Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          powershell Compress-Archive -Path dist\* -DestinationPath neuropacsUI-windows.zip
+
+      # Upload the built package as an artifact for each OS
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            ${{ runner.os == 'macOS' && 'neuropacsUI.dmg' || '' }}
+            ${{ runner.os == 'Linux' && 'neuropacsUI-linux.tar.gz' || '' }}
+            ${{ runner.os == 'Windows' && 'neuropacsUI-windows.zip' || '' }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: build_artifacts
+
+      - name: Zip Build Artifacts
+        run: |
+          cd build_artifacts
+          zip -r ../build_artifacts.zip .
+          cd ..
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Build Artifacts to GitHub Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build_artifacts.zip
+          asset_name: build_artifacts.zip
+          asset_content_type: application/zip
+
+      # For macOS, if you need to create a DMG, add an extra step:
+      # - name: Create DMG (macOS only)
+      #   if: runner.os == 'macOS'
+      #   run: |
+      #     brew install create-dmg
+      #     create-dmg \
+      #       --volname "neuropacsUI" \
+      #       --window-size 800 400 \
+      #       --icon-size 100 \
+      #       --icon "neuropacsUI" 200 150 \
+      #       --app-drop-link 600 150 \
+      #       dist/neuropacsUI.dmg dist/neuropacsUI.app
+
+      # - name: Upload build artifacts
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: ${{ matrix.os }}-build
+      #     path: dist/

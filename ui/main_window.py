@@ -6,12 +6,42 @@ from PyQt5.QtWidgets import (
     QLineEdit, QFileDialog, QTableWidget, QTableWidgetItem, 
     QProgressBar, QMessageBox, QDialog, QComboBox, QDialogButtonBox, QTextEdit,
     QStatusBar, QToolBar, QAction, QInputDialog, QStackedWidget,
-    QGridLayout, QToolButton
+    QGridLayout, QToolButton, QFormLayout
 )
 from PyQt5.QtGui import QPixmap, QIcon, QColor, QFont, QMovie, QDesktopServices
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QUrl, QTimer
 from storage import get_api_key, set_api_key, add_job, get_jobs, remove_job, update_job_field
 from sdk_client import SDKClient
+
+class EmailReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Send Email Report")
+        
+        # Use a form layout for neatness.
+        layout = QFormLayout(self)
+        
+        self.start_date_edit = QLineEdit(self)
+        self.start_date_edit.setPlaceholderText("MM/DD/YYYY")
+        # Enforce date format using an input mask.
+        self.start_date_edit.setInputMask("00/00/0000")
+        
+        self.end_date_edit = QLineEdit(self)
+        self.end_date_edit.setPlaceholderText("MM/DD/YYYY")
+        self.end_date_edit.setInputMask("00/00/0000")
+        
+        layout.addRow("Start Date:", self.start_date_edit)
+        layout.addRow("End Date:", self.end_date_edit)
+        
+        # Dialog buttons: OK and Cancel.
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+    def get_dates(self):
+        """Return a tuple of (start_date, end_date) entered by the user."""
+        return self.start_date_edit.text().strip(), self.end_date_edit.text().strip()
 
 class UploadWorker(QThread):
     progress_signal = pyqtSignal(int)
@@ -151,13 +181,10 @@ class MainWindow(QMainWindow):
         track_order_action.triggered.connect(self.track_order_id)
         self.toolbar.addAction(track_order_action)
 
-        # # Action: Toggle QC check
-        # self.qc_toggle_action = QAction("QC", self)
-        # self.qc_toggle_action.setCheckable(True)
-        # self.qc_toggle_action.setChecked(True)  # Default is enabled
-        # self.qc_toggle_action.triggered.connect(self.toggle_qc_feature)
-        # self.toolbar.addAction(self.qc_toggle_action)
-        # self.qc_enabled = True  # Accessible state of the QC toggle
+        send_email_action = QAction("Send Email Report", self)
+        send_email_action.triggered.connect(self.open_email_report_dialog)
+        self.toolbar.addAction(send_email_action)
+
         self.qc_toggle_button = QToolButton(self)
         self.qc_toggle_button.setText("QC")
         self.qc_toggle_button.setCheckable(True)
@@ -336,6 +363,15 @@ class MainWindow(QMainWindow):
         if self.stacked_widget.currentWidget() == self.main_page:
             self.populate_jobs_table()
 
+    def open_email_report_dialog(self):
+        """Opens a dialog to input dates and then calls the SDK function with these dates."""
+        dialog = EmailReportDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            start_date, end_date = dialog.get_dates()
+            res = self.sdk_client.getReport(start_date=start_date, end_date=end_date)
+            QMessageBox.information(self, "Report Sent", res)
+            
+
     def resource_path(self, relative_path):
         """Get the absolute path to a resource, works for dev and for PyInstaller."""
         if hasattr(sys, "_MEIPASS"):
@@ -458,12 +494,15 @@ class MainWindow(QMainWindow):
     def on_upload_complete(self, order_id, dataset_id, product="Atypical/MSAp/PSP-v1.0"):
         if self.progress_bar.value() == 100:
             if self.qc_enabled == True:
+                # Stop any existing timer
+                if hasattr(self, 'qc_timer') and self.qc_timer.isActive():
+                    self.qc_timer.stop()
                 from datetime import datetime
                 timestamp = str(datetime.now())
                 add_job(order_id, dataset_id, product, "IP", timestamp) 
                 self.add_job_to_table(order_id, dataset_id, product, timestamp, "IP", "QC Running...")
                 self.set_qc_results(order_id, 
-                    lambda qc_result: self.after_qc_check(qc_result, order_id, dataset_id, product)
+                    lambda qc_result: self.after_qc_check(qc_result, order_id)
                 )
                 self.hide_spinner()
             else:
@@ -478,7 +517,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.upload_button.setEnabled(True)
 
-    def after_qc_check(self, qc_result, order_id, dataset_id, product):
+    def after_qc_check(self, qc_result, order_id):
         if qc_result:
             # Only start the job if QC passed.
             success = self.sdk_client.runJob(order_id)
@@ -578,13 +617,13 @@ class MainWindow(QMainWindow):
 
         # Determine what image to use for QC row
         if qc == "PASS":
-            icon_src = "resources/pass.png"
+            icon_src = self.resource_path("resources/pass.png")
         elif qc == "FAIL":
-            icon_src = "resources/fail.png"
+            icon_src = self.resource_path("resources/fail.png")
         elif qc == "IP":
-            icon_src = "resources/loading.png"
+            icon_src = self.resource_path("resources/loading.png")
         else:
-            icon_src = "resources/question.png"
+            icon_src = self.resource_path("resources/question.png")
         
         qc_icon = QIcon(icon_src)  # file path
         qc_item.setIcon(qc_icon)
@@ -768,8 +807,10 @@ class MainWindow(QMainWindow):
                 self.get_results_dialog(order_id.strip())
 
     def toggle_qc_feature(self, checked):
-        self.qc_enabled = checked
-        if checked:
-            self.statusbar.showMessage("QC Check Enabled", 5000)
+        self.qc_enabled = bool(checked)
+        # If turning QC off, stop any running QC timer
+        if not self.qc_enabled and hasattr(self, 'qc_timer') and self.qc_timer.isActive():
+            self.qc_timer.stop()
+            self.statusbar.showMessage("QC Check Disabled and pending QC timer stopped", 5000)
         else:
-            self.statusbar.showMessage("QC Check Disabled", 5000)
+            self.statusbar.showMessage("QC Check Enabled", 5000)
