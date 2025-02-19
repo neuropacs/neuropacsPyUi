@@ -6,12 +6,10 @@ from PyQt5.QtWidgets import (
     QLineEdit, QFileDialog, QTableWidget, QTableWidgetItem, 
     QProgressBar, QMessageBox, QDialog, QComboBox, QDialogButtonBox, QTextEdit,
     QStatusBar, QToolBar, QAction, QInputDialog, QStackedWidget,
-    QGridLayout, QSpacerItem, QSizePolicy
+    QGridLayout, QToolButton
 )
 from PyQt5.QtGui import QPixmap, QIcon, QColor, QFont, QMovie, QDesktopServices
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QUrl, QTimer
-
-# Now 'add_job' and 'get_jobs' handle dicts with "order_id" and "dataset_id"
 from storage import get_api_key, set_api_key, add_job, get_jobs, remove_job, update_job_field
 from sdk_client import SDKClient
 
@@ -153,6 +151,34 @@ class MainWindow(QMainWindow):
         track_order_action.triggered.connect(self.track_order_id)
         self.toolbar.addAction(track_order_action)
 
+        # # Action: Toggle QC check
+        # self.qc_toggle_action = QAction("QC", self)
+        # self.qc_toggle_action.setCheckable(True)
+        # self.qc_toggle_action.setChecked(True)  # Default is enabled
+        # self.qc_toggle_action.triggered.connect(self.toggle_qc_feature)
+        # self.toolbar.addAction(self.qc_toggle_action)
+        # self.qc_enabled = True  # Accessible state of the QC toggle
+        self.qc_toggle_button = QToolButton(self)
+        self.qc_toggle_button.setText("QC")
+        self.qc_toggle_button.setCheckable(True)
+        self.qc_toggle_button.setChecked(True)
+        self.qc_toggle_button.clicked.connect(lambda checked: self.toggle_qc_feature(checked))
+        self.qc_toggle_button.setStyleSheet("""
+            QToolButton {
+                background-color: #ccc;
+                color: #333;
+                border: 1px solid #888;
+                border-radius: 4px;
+                padding: 5px 10px;
+            }
+            QToolButton:checked {
+                background-color: #6ACF65;
+                color: #fff;
+            }
+        """)
+        self.toolbar.addWidget(self.qc_toggle_button)
+        self.qc_enabled = True  # This state is still accessible in your code
+
         # Create the top frame as QWidget (no borders)
         top_frame = QWidget()
 
@@ -207,15 +233,16 @@ class MainWindow(QMainWindow):
         bottom_frame = QWidget()
         bottom_layout = QVBoxLayout(bottom_frame)
 
-        self.jobs_table = QTableWidget(0, 6)
-        self.jobs_table.setHorizontalHeaderLabels(["Time Started", "Product", "Order ID", "Dataset", "Status", "Actions"])
+        self.jobs_table = QTableWidget(0, 7)
+        self.jobs_table.setHorizontalHeaderLabels(["Time Started", "Product", "Order ID", "Dataset", "QC", "Status", "Actions"])
         self.jobs_table.setAlternatingRowColors(True)
         self.jobs_table.horizontalHeader().setStretchLastSection(True)
         self.jobs_table.setColumnWidth(0, 120)
         self.jobs_table.setColumnWidth(1, 100)
         self.jobs_table.setColumnWidth(2, 100)
         self.jobs_table.setColumnWidth(3, 100)
-        self.jobs_table.setColumnWidth(4, 300)
+        self.jobs_table.setColumnWidth(4, 30)
+        self.jobs_table.setColumnWidth(5, 300)
         bottom_layout.addWidget(self.jobs_table)
         self.jobs_table.setSortingEnabled(False)
 
@@ -260,7 +287,7 @@ class MainWindow(QMainWindow):
         footer_layout.addWidget(self.spinner_widget, 0, 0, alignment=Qt.AlignLeft)
 
         # Centered copyright message
-        copyright_label = QLabel("© 2024 neuropacs. All rights reserved.")
+        copyright_label = QLabel("© 2025 neuropacs. All rights reserved.")
         font = copyright_label.font()
         font.setPointSize(10)
         copyright_label.setFont(font)
@@ -373,18 +400,98 @@ class MainWindow(QMainWindow):
     def on_upload_progress(self, value):
         self.progress_bar.setValue(value)
 
+    def is_valid_qc_obj(self, qc_results):
+        if isinstance(qc_results, (list, tuple)) and len(qc_results) >= 12:
+            main_status = qc_results[11]
+            return main_status
+        else:
+            return None
+
+    def is_qc_fail_obj(self, qc_results):
+        if isinstance(qc_results, (dict)) and qc_results.get("status", None) != None:
+            return qc_results.get("status", None)
+        else:
+            return None
+
+    def set_qc_results(self, order_id, callback):
+        """
+        Periodically check QC status every 10 seconds (max 3 minutes).
+        Once a QC result (PASS or FAIL) is obtained (or max time reached),
+        update the job and call the callback with a Boolean (True for PASS, False otherwise).
+        """
+        self.qc_elapsed = 0  # seconds elapsed
+        self.qc_timer = QTimer(self)
+        self.qc_timer.setInterval(10000)  # 10 seconds in milliseconds
+
+        def check_qc():
+            qc_results = self.sdk_client.qcCheck(order_id)
+            final_qc_status = self.is_valid_qc_obj(qc_results)
+            qc_failed_status = self.is_qc_fail_obj(qc_results)
+
+            if final_qc_status is not None:
+                self.qc_timer.stop()
+                if final_qc_status["Status"] == "PASS":
+                    update_job_field(order_id, "qc", "PASS")
+                    callback(True)
+                elif final_qc_status["Status"] == "FAIL":
+                    update_job_field(order_id, "qc", "FAIL")
+                    callback(False)
+            elif qc_failed_status is not None:
+                self.qc_timer.stop()
+                update_job_field(order_id, "qc", "FAIL")
+                callback(False)
+            else:
+                self.qc_elapsed += 10
+                # if self.qc_elapsed >= 180:
+                if self.qc_elapsed >= 300:
+                    # Timeout reached after 3 minutes
+                    self.qc_timer.stop()
+                    update_job_field(order_id, "qc", "FAIL")
+                    callback(False)
+
+        # Connect the timer so that check_qc runs every 10 seconds.
+        self.qc_timer.timeout.connect(check_qc)
+        # Check immediately before starting the timer.
+        check_qc()
+        self.qc_timer.start()
+
     def on_upload_complete(self, order_id, dataset_id, product="Atypical/MSAp/PSP-v1.0"):
         if self.progress_bar.value() == 100:
-            success = self.sdk_client.runJob(order_id)
-            if success:
+            if self.qc_enabled == True:
                 from datetime import datetime
                 timestamp = str(datetime.now())
-                add_job(order_id, dataset_id, product, timestamp) 
-                self.add_job_to_table(order_id, dataset_id, product, timestamp, "0% - Initializing")
+                add_job(order_id, dataset_id, product, "IP", timestamp) 
+                self.add_job_to_table(order_id, dataset_id, product, timestamp, "IP", "QC Running...")
+                self.set_qc_results(order_id, 
+                    lambda qc_result: self.after_qc_check(qc_result, order_id, dataset_id, product)
+                )
+                self.hide_spinner()
+            else:
+                success = self.sdk_client.runJob(order_id)
+                if success:
+                    from datetime import datetime
+                    timestamp = str(datetime.now())
+                    add_job(order_id, dataset_id, product, "NA", timestamp) 
+                    self.add_job_to_table(order_id, dataset_id, product, timestamp, "NA", "0% - Initializing")
+                    self.statusbar.showMessage(f"Job {order_id} started successfully!", 5000)
+                    QMessageBox.information(self, "Job Started", f"Job {order_id} started successfully!")
+        self.progress_bar.setValue(0)
+        self.upload_button.setEnabled(True)
+
+    def after_qc_check(self, qc_result, order_id, dataset_id, product):
+        if qc_result:
+            # Only start the job if QC passed.
+            success = self.sdk_client.runJob(order_id)
+            if success:
+                update_job_field(order_id, "qc", "PASS")
                 self.statusbar.showMessage(f"Job {order_id} started successfully!", 5000)
                 QMessageBox.information(self, "Job Started", f"Job {order_id} started successfully!")
                 self.progress_bar.setValue(0)
-        self.upload_button.setEnabled(True)
+        else:
+            update_job_field(order_id, "last_status", "QC failed")
+            QMessageBox.warning(self, "QC Failed", f"QC check for job {order_id} failed or timed out. Job will not run.")
+
+        self.populate_jobs_table()
 
     def on_search(self):
         """
@@ -442,11 +549,12 @@ class MainWindow(QMainWindow):
         for job in jobs:
             try:
                 # if not job["last_status"] == "Finished":  # Do not recheck if job is already finished (or always check on new key)
-                new_status = self.sdk_client.checkStatus(job["order_id"])
-                if not new_status == job["last_status"]: # update status of each job on render
-                    update_job_field(job["order_id"], "last_status", new_status)
-                    job["last_status"] = new_status
-                self.add_job_to_table(job["order_id"], job["dataset_id"], job["product"], job["timestamp"], job["last_status"])
+                if job['qc'] != "FAIL":
+                    new_status = self.sdk_client.checkStatus(job["order_id"])
+                    if not new_status == job["last_status"]: # update status of each job on render
+                        update_job_field(job["order_id"], "last_status", new_status)
+                        job["last_status"] = new_status
+                self.add_job_to_table(job["order_id"], job["dataset_id"], job["product"], job["timestamp"], job["qc"], job["last_status"])
             except Exception as e:
                 if "API key incompatible." in str(e):
                     #! Need to delete file here
@@ -456,7 +564,7 @@ class MainWindow(QMainWindow):
         self.jobs_table.sortItems(0, Qt.AscendingOrder)
         self.make_table_non_editable()
 
-    def add_job_to_table(self, order_id, dataset_id, product, timestamp, status):
+    def add_job_to_table(self, order_id, dataset_id, product, timestamp, qc, status):
         row_count = self.jobs_table.rowCount()
         self.jobs_table.insertRow(row_count)
 
@@ -465,7 +573,21 @@ class MainWindow(QMainWindow):
         product_item = QTableWidgetItem(product)
         order_id_item = QTableWidgetItem(order_id)
         dataset_id_item = QTableWidgetItem(dataset_id)
+        qc_item = QTableWidgetItem()
         status_item = QTableWidgetItem(status)
+
+        # Determine what image to use for QC row
+        if qc == "PASS":
+            icon_src = "resources/pass.png"
+        elif qc == "FAIL":
+            icon_src = "resources/fail.png"
+        elif qc == "IP":
+            icon_src = "resources/loading.png"
+        else:
+            icon_src = "resources/question.png"
+        
+        qc_icon = QIcon(icon_src)  # file path
+        qc_item.setIcon(qc_icon)
 
         # Set text color for readability
         text_color = QColor("#333333")
@@ -480,7 +602,10 @@ class MainWindow(QMainWindow):
         delete_button = QPushButton("Delete")
 
         # Connect buttons to their respective methods, passing only order_id
-        check_button.clicked.connect(lambda _, oid=order_id: self.check_status(oid))
+        if qc != "FAIL" and qc != "IP":
+            check_button.clicked.connect(lambda _, oid=order_id: self.check_status(oid))
+        else:
+            check_button.setEnabled(False)
         delete_button.clicked.connect(lambda _, oid=order_id: self.delete_job(oid))
 
         # Create a widget to hold the buttons and set layout
@@ -496,8 +621,9 @@ class MainWindow(QMainWindow):
         self.jobs_table.setItem(row_count, 1, product_item)
         self.jobs_table.setItem(row_count, 2, order_id_item)
         self.jobs_table.setItem(row_count, 3, dataset_id_item)
-        self.jobs_table.setItem(row_count, 4, status_item)
-        self.jobs_table.setCellWidget(row_count, 5, actions_widget)
+        self.jobs_table.setItem(row_count, 4, qc_item)
+        self.jobs_table.setItem(row_count, 5, status_item)
+        self.jobs_table.setCellWidget(row_count, 6, actions_widget)
 
    
     def make_table_non_editable(self):
@@ -526,7 +652,7 @@ class MainWindow(QMainWindow):
                     status = self.sdk_client.checkStatus(order_id)
                     status_item = QTableWidgetItem(status)
                     status_item.setForeground(QColor("#333333"))
-                    self.jobs_table.setItem(row, 4, status_item)  # Update status column
+                    self.jobs_table.setItem(row, 5, status_item)  # Update status column
                     self.statusbar.showMessage(f"Status of {order_id}: {status}", 5000)
                     
                     # Update the status in storage
@@ -630,8 +756,8 @@ class MainWindow(QMainWindow):
                 from datetime import datetime
                 timestamp = str(datetime.now())
                 status = self.sdk_client.checkStatus(order_id)
-                add_job(order_id, "Unknown", "Atypical/MSAp/PSP-v1.0", timestamp) 
-                self.add_job_to_table(order_id, "Unknown", "Atypical/MSAp/PSP-v1.0", timestamp, status)
+                add_job(order_id, "Unknown", "Atypical/MSAp/PSP-v1.0", "NA", timestamp) 
+                self.add_job_to_table(order_id, "Unknown", "Atypical/MSAp/PSP-v1.0", timestamp, "NA", status)
             except Exception as e:
                 QMessageBox.information(self, "Order tracking failed", f"Failed to add {order_id} to list.")
                 self.hide_spinner()
@@ -641,8 +767,9 @@ class MainWindow(QMainWindow):
             if status.lower() == "done":
                 self.get_results_dialog(order_id.strip())
 
-    # Function to handle opening URLs can be added here if needed
-    # Example:
-    # def open_website(self):
-    #     url = "https://www.neuropacs.com"
-    #     QDesktopServices.openUrl(QUrl(url))
+    def toggle_qc_feature(self, checked):
+        self.qc_enabled = checked
+        if checked:
+            self.statusbar.showMessage("QC Check Enabled", 5000)
+        else:
+            self.statusbar.showMessage("QC Check Disabled", 5000)

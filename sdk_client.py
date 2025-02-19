@@ -32,6 +32,13 @@ class SDKClient:
     def runJob(self, order_id):
         self.npcs.run_job(order_id=order_id, product_name="Atypical/MSAp/PSP-v1.0")
         return True
+    
+    def qcCheck(self, order_id):
+        qc_results = self.npcs.qc_check(order_id=order_id, format="JSON")
+        return json.loads(qc_results)
+        # if json.loads(qc_results)[11]["Status"] == "PASS":
+        #     return True
+        # return False
 
     def checkStatus(self, order_id):
         status = self.npcs.check_status(order_id=order_id)

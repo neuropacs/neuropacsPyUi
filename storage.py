@@ -39,7 +39,7 @@ def set_api_key(api_key):
     data["api_key"] = api_key
     save_app_data(data)
 
-def add_job(order_id, dataset_id, product, timestamp):
+def add_job(order_id, dataset_id, product, qc, timestamp):
     """
     Adds a job entry with order_id and dataset_id to the jobs list.
     If the order_id already exists, we update the dataset_id.
@@ -58,7 +58,7 @@ def add_job(order_id, dataset_id, product, timestamp):
             return
 
     # Otherwise, append a new job dictionary
-    data["jobs"].append({"order_id": order_id, "dataset_id": dataset_id, "last_status": "Started", "product": product, "timestamp": timestamp})
+    data["jobs"].append({"order_id": order_id, "dataset_id": dataset_id, "last_status": "Started", "product": product, "qc": qc, "timestamp": timestamp})
     save_app_data(data)
 
 def get_jobs():
